@@ -1,0 +1,105 @@
+name: sync-upstream
+
+# Keeps this fork's `master` identical to jherrma/supercharged-memory's `master`.
+#
+# WHY THIS FILE IS NOT ON `master`, which is the first thing anybody will want to change:
+# a workflow committed to `master` puts this fork one commit ahead of upstream, and every
+# fast-forward after that fails — permanently. `schedule` only fires from the default
+# branch, so "automate it" and "keep master a pure mirror" cannot both live on `master`.
+# This branch is the default branch for that reason alone; `master` carries upstream's
+# history and nothing of ours.
+#
+# Consequence worth knowing: this branch does NOT track upstream. It is a snapshot of
+# master from the day it was created plus this file. That is fine — nothing here reads
+# the repository's own code — but do not mistake it for a second mirror.
+
+on:
+  schedule:
+    # 05:17 UTC daily. Off the hour on purpose: GitHub queues scheduled jobs across all of
+    # its users, and the top of the hour is where that queue is deepest.
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+permissions:
+  # The only write this needs, and it is a push to our own fork. Upstream is public, so
+  # reading it needs no credential at all — no PAT, no secret.
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out this fork's master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          # Full history: a shallow clone cannot be fast-forwarded onto upstream, and the
+          # merge below would fail with "refusing to merge unrelated histories".
+          fetch-depth: 0
+
+      - name: Fast-forward master from upstream
+        env:
+          UPSTREAM: https://github.com/jherrma/supercharged-memory.git
+        run: |
+          set -euo pipefail
+
+          git remote add upstream "$UPSTREAM"
+          git fetch upstream master --prune
+
+          before=$(git rev-parse HEAD)
+          after=$(git rev-parse upstream/master)
+
+          if [ "$before" = "$after" ]; then
+            echo "already identical to upstream/master at ${after:0:12}"
+            echo "already up to date at \`${after:0:12}\`" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # --ff-only, deliberately. If this fork's master ever carries a commit of its
+          # own, the honest outcome is a red job asking a human what to do — not a merge
+          # commit that quietly makes the divergence permanent and turns every later sync
+          # into a merge too.
+          if ! git merge --ff-only upstream/master; then
+            {
+              echo "### Sync refused"
+              echo
+              echo "\`master\` has diverged from \`upstream/master\` and cannot be fast-forwarded."
+              echo "Something was committed to this fork's \`master\`; move it to a branch of"
+              echo "its own, then re-run this workflow."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::master has diverged from upstream/master — see the job summary"
+            exit 1
+          fi
+
+          git push origin master
+          echo "synced ${before:0:12} -> ${after:0:12}"
+          echo "synced \`${before:0:12}\` → \`${after:0:12}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the schedule alive
+        # A public repository's scheduled workflows are disabled after 60 days with no
+        # repository activity, and "no upstream commits for two months" is exactly when
+        # this job looks idle and gets switched off — the one moment nobody would notice.
+        # A run is not activity; a commit is. This touches a file on THIS branch (never on
+        # master, which must stay a pure mirror) so the clock resets whether or not there
+        # was anything to sync.
+        run: |
+          set -euo pipefail
+
+          git fetch origin automation
+          git checkout -B automation origin/automation
+          date -u +'%Y-%m-%dT%H:%M:%SZ' > .github/last-sync-run
+
+          if git diff --quiet -- .github/last-sync-run; then
+            echo "heartbeat unchanged, nothing to commit"
+            exit 0
+          fi
+
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/last-sync-run
+          git commit -m 'chore: sync-upstream heartbeat'
+          git push origin automation
