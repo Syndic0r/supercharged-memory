@@ -1,11 +1,13 @@
 #!/bin/bash
-# Daily backup of the local Turso memory DB (supercharged-memory) -> local backups folder.
+# Backup of the local Turso memory DB (supercharged-memory) -> local Backups folder.
 # Concurrent-safe: opens with --experimental-multiprocess-wal (plus the IOCP VFS on
 # Windows, which that flag requires there), so the dump runs
 # as a reader even while Claude sessions hold the DB. Produces a gzipped SQL
-# dump, VALIDATES it (non-empty + has INSERTs + gzip intact), and retains
-# 3 daily + 4 weekly (Monday) copies so a long weekend can't rotate out every
-# good dump.
+# dump, VALIDATES it (non-empty + has INSERTs + gzip intact), and writes one
+# dated file per run. Nothing is pruned by default.
+#
+# Opt-in weekly tier: SUPERCHARGED_MEMORY_WEEKLY_BACKUP=1 also keeps a copy on
+# Mondays and prunes the weekly copies to the 4 most recent.
 set -uo pipefail
 
 TURSO="${TURSO_BIN:-$HOME/.turso/tursodb}"
@@ -73,10 +75,9 @@ mv "$TMP" "$OUT"
 gzip -f "$OUT"
 gzip -t "$OUT.gz" || { echo "[backup] gzip corrupt: $OUT.gz" >&2; rm -f "$OUT.gz"; exit 1; }
 
-# Weekly tier: on Mondays keep a separate weekly copy.
-[ "$(date +%u)" = "1" ] && cp "$OUT.gz" "$DEST/$STAMP-supercharged-memory-weekly.sql.gz"
-
-# Prune: 3 most recent daily, 4 most recent weekly (globs are disjoint by suffix).
-ls -1t "$DEST"/*-supercharged-memory.sql.gz 2>/dev/null | tail -n +4 | xargs -I{} rm -f {}
-ls -1t "$DEST"/*-supercharged-memory-weekly.sql.gz 2>/dev/null | tail -n +5 | xargs -I{} rm -f {}
+# Opt-in weekly tier: on Mondays keep a separate weekly copy, and keep the 4 most recent.
+if [ "${SUPERCHARGED_MEMORY_WEEKLY_BACKUP:-0}" = "1" ]; then
+  [ "$(date +%u)" = "1" ] && cp "$OUT.gz" "$DEST/$STAMP-supercharged-memory-weekly.sql.gz"
+  ls -1t "$DEST"/*-supercharged-memory-weekly.sql.gz 2>/dev/null | tail -n +5 | xargs -I{} rm -f {}
+fi
 echo "[backup] ok: $OUT.gz"

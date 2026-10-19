@@ -401,6 +401,30 @@ Then document them as `coworkers/<name>.md` (template in `coworkers/README.md`).
 New coworkers default to `supervised` trust until you appraise them. To use one in
 a session, the user tells the agent "load <Name>."
 
+## Step 9 — Offer automatic backups
+
+Once setup succeeds, ask whether the user wants backups to run on a schedule as well.
+Present it as optional, and off by default. Backups are on request only, and nothing
+in this setup schedules them. Do not create a schedule yourself: give the user the
+command and let them run it.
+
+Say what a schedule does before offering it: each run writes a new dated file, and
+nothing deletes old files by default, so a daily schedule adds one file per day to
+`Backups/`.
+
+If the user wants a schedule, ask which OS they are on and give the matching command,
+with `<repo>` replaced by the repository path:
+
+- **macOS:** a launchd job that runs `bash "<repo>/scripts/supercharged-memory-backup.sh"`
+  on the chosen schedule.
+- **Linux:** a cron entry, added with `crontab -e`, for example
+  `0 3 * * * bash "<repo>/scripts/supercharged-memory-backup.sh"` for 03:00 daily.
+- **Windows:** a Task Scheduler entry that runs
+  `bash "<repo>/scripts/supercharged-memory-backup.sh"` through Git Bash.
+
+If the user also wants a weekly copy, the scheduled job needs
+`SUPERCHARGED_MEMORY_WEEKLY_BACKUP=1` in its environment. It is off by default. When it
+is on, the script keeps a Monday copy and the 4 most recent weekly copies.
 
 ## Windows
 
@@ -510,13 +534,6 @@ Two things you do *not* have to worry about: the `.exe` extension (both
 `CreateProcess` and Git Bash append it, so the scripts' default
 `~/.turso/tursodb` resolves), and `PATH` for the MCP server (register it with
 absolute paths, as Step 6 does, and it does not need one).
-
-### Not covered
-
-The launchd backup job in the README is macOS-only. The Windows equivalent is a
-Task Scheduler entry running `bash scripts/supercharged-memory-backup.sh` through
-Git Bash; the script itself works on Windows, only the scheduling is missing.
-That is out of scope here.
 
 ## Done
 

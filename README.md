@@ -2,7 +2,7 @@
 
 A bootstrap for **local, embedded, long-term memory for AI coding agents** (built for [Claude Code](https://claude.com/claude-code)).
 
-Your agent's text is embedded with a local model and stored as a vector in a local [Turso](https://github.com/tursodatabase/turso) (SQLite-compatible) database, so it recalls memories by *meaning* — with an IDF-weighted keyword credit so exact ids and error strings still surface. Everything runs on your machine: no cloud, no API cost, no data leaving your laptop. The database is the single source of truth; a daily job backs it up locally, and a multiprocess flag lets several agent instances share it at once.
+Your agent's text is embedded with a local model and stored as a vector in a local [Turso](https://github.com/tursodatabase/turso) (SQLite-compatible) database, so it recalls memories by *meaning* — with an IDF-weighted keyword credit so exact ids and error strings still surface. Everything runs on your machine: no cloud, no API cost, no data leaving your laptop. The database is the single source of truth; you back it up locally on request, and a multiprocess flag lets several agent instances share it at once.
 
 ## Features
 
@@ -14,7 +14,7 @@ Your agent's text is embedded with a local model and stored as a vector in a loc
 - **Graceful degradation** — if the embedding model is offline, recall falls back to keyword-only and the DB stays usable.
 - **Sleep & deep sleep** — user-triggered consolidation: sift events into facts, then (deep) purge what you agree is dead, merge near-duplicates, and derive patterns and trends across the whole event log. All of it read by subagents, so the cost doesn't land in your session's context.
 - **Coworkers** — optional named AI personas with scoped memory and trust-gated autonomy.
-- **Backups built in** — validated, gzipped daily dumps with daily + weekly retention.
+- **Backups built in** — validated, gzipped dumps, one dated file per request; weekly copies are opt-in.
 
 ## Dependencies
 
@@ -111,7 +111,8 @@ Scripts read these environment variables (defaults in `scripts/memlib.py`):
 | `OLLAMA_URL` | `http://localhost:11434` | Ollama endpoint. |
 | `EMBED_MODEL` | `bge-m3` | Embedding model; one per DB. |
 | `RECALL_ALPHA` | `0.15` | Keyword weight in recall ranking. Corpus-calibrated — see below. |
-| `BACKUP_DIR` | `./Backups` | Where daily dumps are written. |
+| `BACKUP_DIR` | `./Backups` | Where dumps are written. |
+| `SUPERCHARGED_MEMORY_WEEKLY_BACKUP` | unset (off) | Set to `1` to also keep a Monday copy and the 4 most recent weekly copies. |
 | `TURSO_VFS` | `experimental_win_iocp` on Windows, else unset | tursodb IO backend, paired with `--experimental-multiprocess-wal`. Set it to `none` (or empty) to drop `--vfs` entirely. See `instructions/SETUP.md`, *Windows*. |
 | `SUPERCHARGED_MEMORY_EVAL_DIR` | `<db parent>/eval` | Query-embedding cache for the eval harness. Derived data; the cases themselves live in the DB. |
 
@@ -327,7 +328,7 @@ phrase `database is busy|locked` in either stream (see
 - **`sleep.py`** — the mechanical write primitives a sleep pass needs, no judgment of
   its own: `--mark-processed`, `--retire`, `--rebuild-topics`, plus deep sleep's
   `--purge` (guarded hard delete) and `--cluster` (read-only similarity grouping).
-- **`supercharged-memory-backup.sh`** — the daily backup (below).
+- **`supercharged-memory-backup.sh`** — the backup (below).
 - **`restore.py`** — replay a dump into a fresh DB and *verify* it, splitting on real
   statement boundaries because piping a dump into `tursodb` restores only a fraction
   of the rows (below). Refuses an existing target; exits non-zero on any row mismatch.
@@ -590,11 +591,13 @@ before the same exception.
 
 ## Backup & restore
 
-- **Daily backup** — schedule `scripts/supercharged-memory-backup.sh` (e.g. a
-  launchd/cron job) to produce a **validated** gzipped SQL dump
-  `YYYY-MM-DD-supercharged-memory.sql.gz` in `Backups/` (concurrent-safe reader;
-  checks non-empty + has INSERTs + gzip intact). Retains **3 daily + 4 weekly**
-  (Monday) copies, and runs even while a session is open.
+- **Backup** — `bash scripts/supercharged-memory-backup.sh` writes one **validated**
+  gzipped SQL dump, `YYYY-MM-DD-supercharged-memory.sql.gz`, to `Backups/`
+  (concurrent-safe reader; checks non-empty + has INSERTs + gzip intact). Nothing is
+  pruned, and it runs even while a session is open. Backups are taken on request only;
+  nothing in this repo schedules them.
+- **Weekly copies (opt-in):** set `SUPERCHARGED_MEMORY_WEEKLY_BACKUP=1` to also keep a
+  copy on Mondays and retain the **4 most recent** weekly copies.
 - **Manual backup:** `bash scripts/supercharged-memory-backup.sh` — this is also what
   the agent runs when the user asks for a backup (`CLAUDE.md.template` points at
   the script by absolute path). Dumps always land in this repo's `Backups/`, the

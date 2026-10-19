@@ -8,7 +8,7 @@ The **source-controlled bootstrap** for a local, Turso-only long-term memory sys
 
 - **The DB** (default `${XDG_DATA_HOME:-~/.local/share}/turso/supercharged-memory.db`, XDG-conformant; override with `SUPERCHARGED_MEMORY_TURSO_PATH`) — the single source of truth. Must be **local only, never in a cloud-synced folder** (cloud sync corrupts live SQLite).
 - **The active instructions** (`~/.claude/CLAUDE.md`) — rendered from `CLAUDE.md.template` and installed between managed markers by `install-claude-md.sh`.
-- **Backups** — a local `Backups/` folder written by a daily launchd job.
+- **Backups** — a local `Backups/` folder, written on request only (never scheduled).
 
 So editing `CLAUDE.md.template` or `scripts/*` here changes behavior only after re-running the installer / the next session. There is **no build, lint, or test tooling** — the scripts are plain Python 3 stdlib (no dependencies) plus bash.
 
