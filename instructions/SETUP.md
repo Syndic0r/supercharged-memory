@@ -404,13 +404,13 @@ a session, the user tells the agent "load <Name>."
 ## Step 9 — Offer automatic backups
 
 Once setup succeeds, ask whether the user wants backups to run on a schedule as well.
-Present it as optional, and off by default. Backups are on request only, and nothing
+Present it as optional, and off by default. backups are on request only, and nothing
 in this setup schedules them. Do not create a schedule yourself: give the user the
 command and let them run it.
 
 Say what a schedule does before offering it: each run writes a new dated file, and
 nothing deletes old files by default, so a daily schedule adds one file per day to
-`Backups/`.
+`backups/`.
 
 If the user wants a schedule, ask which OS they are on and give the matching command,
 with `<repo>` replaced by the repository path:

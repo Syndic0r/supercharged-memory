@@ -14,7 +14,7 @@ Your agent's text is embedded with a local model and stored as a vector in a loc
 - **Graceful degradation** — if the embedding model is offline, recall falls back to keyword-only and the DB stays usable.
 - **Sleep & deep sleep** — user-triggered consolidation: sift events into facts, then (deep) purge what you agree is dead, merge near-duplicates, and derive patterns and trends across the whole event log. All of it read by subagents, so the cost doesn't land in your session's context.
 - **Coworkers** — optional named AI personas with scoped memory and trust-gated autonomy.
-- **Backups built in** — validated, gzipped dumps, one dated file per request; weekly copies are opt-in.
+- **backups built in** — validated, gzipped dumps, one dated file per request; weekly copies are opt-in.
 
 ## Dependencies
 
@@ -111,7 +111,7 @@ Scripts read these environment variables (defaults in `scripts/memlib.py`):
 | `OLLAMA_URL` | `http://localhost:11434` | Ollama endpoint. |
 | `EMBED_MODEL` | `bge-m3` | Embedding model; one per DB. |
 | `RECALL_ALPHA` | `0.15` | Keyword weight in recall ranking. Corpus-calibrated — see below. |
-| `BACKUP_DIR` | `./Backups` | Where dumps are written. |
+| `BACKUP_DIR` | `./backups` | Where dumps are written. |
 | `SUPERCHARGED_MEMORY_WEEKLY_BACKUP` | unset (off) | Set to `1` to also keep a Monday copy and the 4 most recent weekly copies. |
 | `TURSO_VFS` | `experimental_win_iocp` on Windows, else unset | tursodb IO backend, paired with `--experimental-multiprocess-wal`. Set it to `none` (or empty) to drop `--vfs` entirely. See `instructions/SETUP.md`, *Windows*. |
 | `SUPERCHARGED_MEMORY_EVAL_DIR` | `<db parent>/eval` | Query-embedding cache for the eval harness. Derived data; the cases themselves live in the DB. |
@@ -592,15 +592,15 @@ before the same exception.
 ## Backup & restore
 
 - **Backup** — `bash scripts/supercharged-memory-backup.sh` writes one **validated**
-  gzipped SQL dump, `YYYY-MM-DD-supercharged-memory.sql.gz`, to `Backups/`
+  gzipped SQL dump, `YYYY-MM-DD-supercharged-memory.sql.gz`, to `backups/`
   (concurrent-safe reader; checks non-empty + has INSERTs + gzip intact). Nothing is
-  pruned, and it runs even while a session is open. Backups are taken on request only;
+  pruned, and it runs even while a session is open. backups are taken on request only;
   nothing in this repo schedules them.
 - **Weekly copies (opt-in):** set `SUPERCHARGED_MEMORY_WEEKLY_BACKUP=1` to also keep a
   copy on Mondays and retain the **4 most recent** weekly copies.
 - **Manual backup:** `bash scripts/supercharged-memory-backup.sh` — this is also what
   the agent runs when the user asks for a backup (`CLAUDE.md.template` points at
-  the script by absolute path). Dumps always land in this repo's `Backups/`, the
+  the script by absolute path). Dumps always land in this repo's `backups/`, the
   `BACKUP_DIR` default; `recall.py --candidates` looks there for restorable dumps,
   so keep them together rather than scattering them per-machine. Taking a backup is
   additive and non-destructive; **restoring is neither** — never restore without the
@@ -608,7 +608,7 @@ before the same exception.
 - **Restore** — `scripts/restore.py`, into a fresh DB file:
   ```bash
   python3 scripts/restore.py --out /path/to/new.db        # newest backup by default
-  python3 scripts/restore.py --dump Backups/<file>.sql.gz --out /path/to/new.db
+  python3 scripts/restore.py --dump backups/<file>.sql.gz --out /path/to/new.db
   ```
   It refuses a target that already exists (pass `--force` to override), reads `.sql`
   and `.sql.gz` alike, and prints a per-table `in dump` vs `restored` comparison,
